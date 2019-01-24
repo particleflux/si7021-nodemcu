@@ -7,6 +7,7 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <Ticker.h>
 #include <PubSubClient.h>
+#include <NTPClient.h>
 
 /******
  * Need to change PubSubClient.h version!
@@ -30,6 +31,9 @@ float humidity, temperature;
 IPAddress statsdIP(STATSD_IP);
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, NTP_SERVER, NTP_OFFSET, NTP_INTERVAL);
 
 void setup() {
   Ticker blink;
@@ -57,6 +61,9 @@ void setup() {
 
   // set MQTT server
   client.setServer(MQTT_HOST, 1883);
+
+  // setup NTP client
+  timeClient.begin();
 }
 
 void loop() {
@@ -69,6 +76,9 @@ void loop() {
     delay(1000);
     return;
   }
+
+  // keep NTP time up-to-date - this may block for some seconds in case it does an update
+  timeClient.update();
 
   if (client.connected()) {
      client.loop();
@@ -138,9 +148,10 @@ void update() {
   snprintf(
     buffer,
     sizeof(buffer),
-    "{\"temperature\": %f, \"humidity\": %f, \"time\": 0}",
+    "{\"temperature\": %f, \"humidity\": %f, \"time\": %u}",
     temperature,
-    humidity
+    humidity,
+    timeClient.getEpochTime()
   );
   client.publish(MQTT_PUBLISH_TOPIC, buffer);
 }
