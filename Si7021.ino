@@ -6,6 +6,19 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <Ticker.h>
+#include <PubSubClient.h>
+
+/******
+ * Need to change PubSubClient.h version!
+ * ~/Arduino/libraries/PubSubClient/src/PubSubClient.h
+ * Remove the comment on the 3_1 definition
+ *
+ * // MQTT_VERSION : Pick the version
+ * #define MQTT_VERSION MQTT_VERSION_3_1
+ * #ifndef MQTT_VERSION
+ * #define MQTT_VERSION MQTT_VERSION_3_1_1
+ * #endif
+ */
 
 
 ESP8266WebServer httpServer(80);
@@ -15,7 +28,8 @@ bool isSensorAvailable = true;
 unsigned long lastPublish = 0;
 float humidity, temperature;
 IPAddress statsdIP(STATSD_IP);
-
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 void setup() {
   Ticker blink;
@@ -40,6 +54,9 @@ void setup() {
     isSensorAvailable = false;
     return;
   }
+
+  // set MQTT server
+  client.setServer(MQTT_HOST, 1883);
 }
 
 void loop() {
@@ -51,6 +68,13 @@ void loop() {
   if (!isSensorAvailable) {
     delay(1000);
     return;
+  }
+
+  if (client.connected()) {
+     client.loop();
+  } else {
+    Serial.print("MQTT disconnected, re-connecting...");
+    client.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS);
   }
 
   if (ms - lastPublish < PUBLISH_INTERVAL) {
@@ -96,6 +120,7 @@ void update() {
 
   lastPublish = millis();
 
+  // publish StatsD metrics
   snprintf(
     buffer,
     sizeof(buffer),
@@ -104,9 +129,20 @@ void update() {
     humidity
    );
 
-   udp.beginPacket(statsdIP, STATSD_PORT);
-   udp.write(buffer);
-   udp.endPacket();
+  udp.beginPacket(statsdIP, STATSD_PORT);
+  udp.write(buffer);
+  udp.endPacket();
+
+
+  // publish MQTT message
+  snprintf(
+    buffer,
+    sizeof(buffer),
+    "{\"temperature\": %f, \"humidity\": %f, \"time\": 0}",
+    temperature,
+    humidity
+  );
+  client.publish(MQTT_PUBLISH_TOPIC, buffer);
 }
 
 void ledBlink() {
