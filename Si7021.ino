@@ -5,6 +5,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
+#include <Ticker.h>
 
 
 ESP8266WebServer httpServer(80);
@@ -16,9 +17,22 @@ float humidity, temperature;
 
 
 void setup() {
+  Ticker blink;
+  
+  // setup builtin LED GPIO
+  pinMode(D4, OUTPUT);
+  // turn LED ON
+  digitalWrite(D4, LOW);
+  
   Serial.begin(115200);
   Serial.println("\n\nSi7021 test!");
+  
+  // rapid blinking while connecting and getting ready for OTA
+  blink.attach(0.1, ledBlink);
   setupOTA();
+  blink.detach();
+  // turn LED OFF
+  digitalWrite(D4, HIGH);
   
   if (!sensor.begin()) {
     Serial.println("Did not find Si7021 sensor!");
@@ -66,7 +80,7 @@ void setupOTA() {
 
   MDNS.begin(MY_HOSTNAME);
 
-  httpUpdater.setup(&httpServer);
+  httpUpdater.setup(&httpServer, OTA_USERNAME, OTA_PASSWORD);
   httpServer.begin();
 
   MDNS.addService("http", "tcp", 80);
@@ -79,4 +93,7 @@ void update() {
   lastPublish = millis();
 }
 
+void ledBlink() {
+  digitalWrite(D4, !digitalRead(D4));
+}
 
