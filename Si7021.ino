@@ -1,7 +1,14 @@
 #include "config.h"
 #include "Adafruit_Si7021.h"
 
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266HTTPUpdateServer.h>
 
+
+ESP8266WebServer httpServer(80);
+ESP8266HTTPUpdateServer httpUpdater;
 Adafruit_Si7021 sensor = Adafruit_Si7021();
 bool isSensorAvailable = true;
 unsigned long lastPublish = 0;
@@ -11,6 +18,7 @@ float humidity, temperature;
 void setup() {
   Serial.begin(115200);
   Serial.println("\n\nSi7021 test!");
+  setupOTA();
   
   if (!sensor.begin()) {
     Serial.println("Did not find Si7021 sensor!");
@@ -21,6 +29,9 @@ void setup() {
 
 void loop() {
   unsigned long ms = millis();
+
+  httpServer.handleClient();
+  MDNS.update();
   
   if (!isSensorAvailable) {
     delay(1000);
@@ -41,10 +52,31 @@ void loop() {
 }
 
 
+void setupOTA() {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.hostname(MY_HOSTNAME);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  }
+
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  MDNS.begin(MY_HOSTNAME);
+
+  httpUpdater.setup(&httpServer);
+  httpServer.begin();
+
+  MDNS.addService("http", "tcp", 80);
+}
+
 void update() {
   humidity = sensor.readHumidity();
   temperature = sensor.readTemperature();
 
   lastPublish = millis();
 }
+
 
