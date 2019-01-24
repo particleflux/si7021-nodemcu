@@ -14,6 +14,7 @@ Adafruit_Si7021 sensor = Adafruit_Si7021();
 bool isSensorAvailable = true;
 unsigned long lastPublish = 0;
 float humidity, temperature;
+IPAddress statsdIP(STATSD_IP);
 
 
 void setup() {
@@ -87,10 +88,25 @@ void setupOTA() {
 }
 
 void update() {
+  WiFiUDP udp;
+  char buffer[128];
+
   humidity = sensor.readHumidity();
   temperature = sensor.readTemperature();
 
   lastPublish = millis();
+
+  snprintf(
+    buffer,
+    sizeof(buffer),
+    "home.temperature,room=livingroom:%.2f|g\nhome.humidity,room=livingroom:%.2f|g\n",
+    temperature,
+    humidity
+   );
+
+   udp.beginPacket(statsdIP, STATSD_PORT);
+   udp.write(buffer);
+   udp.endPacket();
 }
 
 void ledBlink() {
